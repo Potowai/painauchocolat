@@ -3,17 +3,19 @@ import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Modal from "../components/Modal";
 import cloudinary from "../utils/cloudinary";
 import getBase64ImageUrl from "../utils/generateBlurPlaceholder";
 import type { ImageProps } from "../utils/types";
 import { useLastViewedPhoto } from "../utils/useLastViewedPhoto";
+import Navbar from "../components/Navbar";
 
 const Home: NextPage = ({ images }: { images: ImageProps[] }) => {
   const router = useRouter();
   const { photoId } = router.query;
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto();
+  const [filter, setFilter] = useState("");
 
   const lastViewedPhotoRef = useRef<HTMLAnchorElement>(null);
 
@@ -24,12 +26,19 @@ const Home: NextPage = ({ images }: { images: ImageProps[] }) => {
     }
   }, [photoId, lastViewedPhoto, setLastViewedPhoto]);
 
+  const handleFilterChange = (size: string) => {
+    setFilter(size);
+  };
+
+  const filteredImages = filter ? images.filter(image => image.size === filter) : images;
+
   return (
     <>
       <Head>
         <title>🍞 🍫</title>
       </Head>
       <main className="mx-auto max-w-[1960px] p-4">
+        <Navbar onFilterChange={handleFilterChange} />
         {photoId && (
           <Modal
             images={images}
@@ -39,7 +48,7 @@ const Home: NextPage = ({ images }: { images: ImageProps[] }) => {
           />
         )}
         <div className="columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4">
-          {images.map(({ id, public_id, format, blurDataUrl }) => (
+          {filteredImages.map(({ id, public_id, format, blurDataUrl }) => (
             <Link
               key={id}
               href={`/?photoId=${id}`}
@@ -78,21 +87,32 @@ export async function getStaticProps() {
     .sort_by("public_id", "desc")
     .max_results(400)
     .execute();
+
   let reducedResults: ImageProps[] = [];
 
-  let i = 0;
-  for (let result of results.resources) {
+  for (let i = 0; i < results.resources.length; i++) {
+    const result = results.resources[i];
+    let size = '';
+    if (result.width <= 500) {
+      size = 'Petit';
+    } else if (result.width > 500 && result.width <= 1000) {
+      size = 'Moyen';
+    } else {
+      size = 'Grand';
+    }
+
     reducedResults.push({
       id: i,
       height: result.height,
       width: result.width,
       public_id: result.public_id,
       format: result.format,
+      size: size,
     });
-    i++;
+    console.log(reducedResults[i].size);
   }
 
-  const blurImagePromises = results.resources.map((image: ImageProps) => {
+  const blurImagePromises = reducedResults.map((image) => {
     return getBase64ImageUrl(image);
   });
   const imagesWithBlurDataUrls = await Promise.all(blurImagePromises);
